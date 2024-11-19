@@ -33,11 +33,13 @@ import org.openas2.util.IOUtil;
 import org.openas2.util.Properties;
 import org.openas2.util.ResponseWrapper;
 
+import jakarta.mail.Header;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetHeaders;
 import jakarta.mail.internet.MimeBodyPart;
 import javax.net.ssl.SSLHandshakeException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -46,6 +48,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.util.Enumeration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
@@ -130,6 +133,33 @@ public class AS2SenderModule extends HttpSenderModule implements HasSchedule {
             // Logger significant msg state
             msg.setOption("STATE", Message.MSG_STATE_SEND_START);
             msg.trackMsgState(getSession());
+
+            //                                                                DEBUG
+            try {
+                logger.debug("Secured Data Headers:");
+
+                if (securedData != null) {
+                    Enumeration<?> headers = securedData.getAllHeaders();
+                    while (headers.hasMoreElements()) {
+                        Header header = (Header) headers.nextElement();
+                        logger.debug("Header: " + header.getName() + " -> " + header.getValue());
+                    }
+                    logger.debug("Secured Data Size: " + securedData.getSize());
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    securedData.writeTo(out);
+                    logger.debug("Secured Data Content: " + out.toString());
+                } else {
+                    logger.error("Secured data is null!");
+                }
+    
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                securedData.writeTo(baos);
+                String content = baos.toString();
+                logger.debug("Secured Data Content: " + content);
+            } catch(Exception e) {
+                logger.error("Error while inspecting securedData", e);
+            }
+          
 
             sendMessage(url, msg, securedData);
         } catch (HttpResponseException hre) {
@@ -379,9 +409,15 @@ public class AS2SenderModule extends HttpSenderModule implements HasSchedule {
             // configured
             addCustomOuterMimeHeaders(msg, dataBP);
             String algorithm = partnership.getAttribute(Partnership.PA_ENCRYPTION_ALGORITHM);
-            String x509_alias = msg.getPartnership().getAlias(Partnership.PTYPE_RECEIVER);
-            X509Certificate receiverCert = certFx.getCertificate(x509_alias);
-            dataBP = AS2Util.getCryptoHelper().encrypt(dataBP, receiverCert, algorithm, contentTxfrEncoding);
+
+            String x509_alias_receiver = msg.getPartnership().getAlias(Partnership.PTYPE_RECEIVER);
+            X509Certificate receiverCert = certFx.getCertificate(x509_alias_receiver);
+
+            String x509_alias_sender = msg.getPartnership().getAlias(Partnership.PTYPE_SENDER);
+            X509Certificate senderCert = certFx.getCertificate(x509_alias_sender);
+            PrivateKey senderKey = certFx.getPrivateKey(x509_alias_sender);
+
+            dataBP = AS2Util.getCryptoHelper().encrypt(dataBP, receiverCert, senderCert, senderKey, algorithm, contentTxfrEncoding);
 
             // Asynch MDN 2007-03-12
             DataHistoryItem historyItem = new DataHistoryItem(dataBP.getContentType());

@@ -10,6 +10,7 @@ import jakarta.mail.internet.MimeBodyPart;
 import java.io.InputStream;
 import java.security.Key;
 import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.cert.Certificate;
 
 public interface ICryptoHelper {
@@ -56,7 +57,7 @@ public interface ICryptoHelper {
 
     MimeBodyPart decrypt(MimeBodyPart part, Certificate cert, Key key) throws Exception;
 
-    MimeBodyPart encrypt(MimeBodyPart part, Certificate cert, String algorithm, String contentTxfrEncoding) throws Exception;
+    MimeBodyPart encrypt(MimeBodyPart part, Certificate cert, Certificate senderCert, PrivateKey senderKey, String algorithm, String contentTxfrEncoding) throws Exception;
 
     void initialize() throws Exception;
 
